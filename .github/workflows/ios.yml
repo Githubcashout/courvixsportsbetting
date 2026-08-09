@@ -1,0 +1,194 @@
+name: Build iOS IPA
+
+# Runs on a free GitHub-hosted macOS runner, so no Mac is required.
+# Produces an UNSIGNED .ipa as a downloadable artifact.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "core.js"
+      - "app.js"
+      - "index.html"
+      - "build.js"
+      - ".github/workflows/ios.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run the test suites before building anything
+        run: |
+          node test/core.test.js
+          node test/bot.test.js
+
+      - name: Build the web bundle into the app
+        run: bash ios/sync-web.sh
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Select the newest installed Xcode
+        run: |
+          echo "Xcode versions on this runner:"
+          ls -d /Applications/Xcode*.app 2>/dev/null || true
+          newest="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$newest" ]; then
+            echo "selecting $newest"
+            sudo xcode-select -s "$newest/Contents/Developer"
+          fi
+          xcodebuild -version
+          echo "XcodeGen: $(xcodegen --version)"
+
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Confirm Xcode can read the generated project
+        working-directory: ios
+        run: |
+          # objectVersion 77 is Xcode 16+; anything older here means a mismatch
+          objv=$(grep -m1 "objectVersion" Courvix.xcodeproj/project.pbxproj | tr -dc "0-9")
+          echo "project objectVersion = $objv"
+          if ! xcodebuild -project Courvix.xcodeproj -list >/dev/null 2>&1; then
+            echo "::error::Xcode $(xcodebuild -version | head -1) cannot read a format-$objv project."
+            xcodebuild -project Courvix.xcodeproj -list || true
+            exit 1
+          fi
+          echo "project is readable by the selected Xcode"
+
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project Courvix.xcodeproj \
+            -scheme Courvix \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Package the .ipa
+        working-directory: ios
+        run: |
+          app="build/Build/Products/Release-iphoneos/Courvix.app"
+          if [ ! -d "$app" ]; then echo "::error::no .app was produced"; exit 1; fi
+          # sanity: the web bundle must actually be inside the app
+          if [ ! -f "$app/web/index.html" ] && [ ! -f "$app/index.html" ]; then
+            echo "::error::web bundle missing from the app"; exit 1
+          fi
+          mkdir -p Payload && cp -R "$app" Payload/
+          zip -qry Courvix-unsigned.ipa Payload
+          ls -lh Courvix-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Courvix-unsigned-ipa
+          path: ios/Courvix-unsigned.ipa
+          retention-days: 30
+
+      # ── AltStore source ────────────────────────────────────────────────
+      # Publishes a release and a source manifest so AltStore can show
+      # Courvix in Browse and push future versions as a one-tap update.
+      - name: Read version and size
+        id: meta
+        working-directory: ios
+        run: |
+          ver=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Courvix/Info.plist)
+          bld=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Courvix/Info.plist)
+          size=$(stat -f%z Courvix-unsigned.ipa)
+          sha=$(shasum -a 256 Courvix-unsigned.ipa | cut -d" " -f1)
+          echo "version=$ver"   >> "$GITHUB_OUTPUT"
+          echo "build=$bld"     >> "$GITHUB_OUTPUT"
+          echo "size=$size"     >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha"    >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate the AltStore source manifest
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          BUILD: ${{ steps.meta.outputs.build }}
+          SIZE: ${{ steps.meta.outputs.size }}
+          SHA: ${{ steps.meta.outputs.sha256 }}
+          DATE: ${{ steps.meta.outputs.date }}
+        run: node ios/make-altstore-source.js
+
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}-${{ github.run_number }}
+          name: Courvix ${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
+          files: ios/Courvix-unsigned.ipa
+          body: |
+            Unsigned iOS build. Install with AltStore — it signs with your own Apple ID.
+
+            SHA-256 `${{ steps.meta.outputs.sha256 }}`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the source to Pages branch
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name  "courvix-ci"
+          git config user.email "ci@courvix.local"
+          git fetch origin gh-pages || true
+          if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+            git checkout -B gh-pages origin/gh-pages
+          else
+            git checkout --orphan gh-pages && git rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp ios/altstore-source.json ./altstore-source.json
+          cp ios/Courvix/Assets.xcassets/AppIcon.appiconset/icon-1024.png ./icon.png
+          git add altstore-source.json icon.png
+          git commit -m "source: v${{ steps.meta.outputs.version }} build ${{ github.run_number }}" || echo "nothing to commit"
+          git push origin gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          repo="${{ github.repository }}"
+          user="${repo%%/*}"; name="${repo##*/}"
+          {
+            echo "## Courvix iOS build"
+            echo ""
+            echo "### AltStore source URL"
+            echo "Paste either of these into **AltStore → Browse → Sources → +**"
+            echo ""
+            echo "Works immediately, no setup:"
+            echo '```'
+            echo "https://raw.githubusercontent.com/${repo}/gh-pages/altstore-source.json"
+            echo '```'
+            echo ""
+            echo "Tidier, needs Pages enabled once (Settings → Pages → branch \`gh-pages\`):"
+            echo '```'
+            echo "https://${user}.github.io/${name}/altstore-source.json"
+            echo '```'
+            echo ""
+            echo "> Both need the repo to be **public** — AltStore downloads without credentials."
+            echo ""
+            echo "### Or install the file directly"
+            echo "Download **Courvix-unsigned-ipa** from Artifacts below, unzip it, and open"
+            echo "the \`.ipa\` with AltStore (My Apps → +)."
+            echo ""
+            echo "Unsigned on purpose — AltStore signs it with your own Apple ID."
+            echo "Free Apple ID: 7-day signature, refresh with AltServer on the same WiFi."
+          } >> "$GITHUB_STEP_SUMMARY"
