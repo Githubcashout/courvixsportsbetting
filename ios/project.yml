@@ -1,0 +1,37 @@
+name: Courvix
+options:
+  bundleIdPrefix: network.courvix
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "4.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"            # iPhone only
+    ENABLE_BITCODE: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  Courvix:
+    type: application
+    platform: iOS
+    sources:
+      # Swift, Info.plist, LaunchScreen and the asset catalog
+      - path: Courvix
+        excludes:
+          - "Resources/**"
+      # A plain resource file, not a folder reference. Folder references push
+      # XcodeGen into the newest project format, which older Xcodes cannot read.
+      # BundleSchemeHandler looks in web/ first and falls back to the bundle
+      # root, so index.html landing at the root is fine.
+      - path: Courvix/Resources/web/index.html
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.courvix.app
+        PRODUCT_NAME: Courvix
+        INFOPLIST_FILE: Courvix/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+        CODE_SIGN_STYLE: Automatic

@@ -1,0 +1,45 @@
+{
+  "name": "Courvix Network",
+  "identifier": "network.courvix.source",
+  "subtitle": "Sports research that shows its working",
+  "description": "Builds of Courvix, published straight from CI.",
+  "iconURL": "https://lincoln.github.io/courvix/icon.png",
+  "headerURL": "https://lincoln.github.io/courvix/icon.png",
+  "website": "https://github.com/lincoln/courvix",
+  "tintColor": "4D8BFF",
+  "apps": [
+    {
+      "name": "Courvix",
+      "bundleIdentifier": "network.courvix.app",
+      "developerName": "Courvix Network",
+      "subtitle": "Honest sports prop research",
+      "localizedDescription": "Courvix is a sports research tool for MLB and NFL player props.\n\nIt reports hit rates with their confidence intervals rather than bare percentages, compares every number to the 52.4% break-even at -110, and its parlay analyser shows the book's actual hold on your ticket next to a single bet's 4.5%.\n\nRuns entirely on free public data. Anything it cannot know — live prop pricing, Pinnacle lines, public betting percentages — it says so on screen instead of inventing it.",
+      "iconURL": "https://lincoln.github.io/courvix/icon.png",
+      "tintColor": "4D8BFF",
+      "category": "utilities",
+      "screenshotURLs": [],
+      "version": "4.0.0",
+      "versionDate": "2026-08-09",
+      "versionDescription": "• MLB and NFL player research on free public data.\n• Hit rates with 95% confidence intervals, not bare percentages.\n• Parlay analyser that shows the book's real hold and expected value.\n• Correlated and contradictory legs are flagged or blocked.\n• Endpoint probe for verifying the live data feeds.",
+      "downloadURL": "https://github.com/lincoln/courvix/releases/download/v4.0.0-7/Courvix-unsigned.ipa",
+      "size": 1234567,
+      "versions": [
+        {
+          "version": "4.0.0",
+          "buildVersion": "1",
+          "date": "2026-08-09",
+          "localizedDescription": "• MLB and NFL player research on free public data.\n• Hit rates with 95% confidence intervals, not bare percentages.\n• Parlay analyser that shows the book's real hold and expected value.\n• Correlated and contradictory legs are flagged or blocked.\n• Endpoint probe for verifying the live data feeds.",
+          "downloadURL": "https://github.com/lincoln/courvix/releases/download/v4.0.0-7/Courvix-unsigned.ipa",
+          "size": 1234567,
+          "sha256": "abc123",
+          "minOSVersion": "15.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": []
+}

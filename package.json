@@ -1,0 +1,17 @@
+{
+  "name": "courvix-network",
+  "version": "1.0.0",
+  "description": "Sports research tool and Discord bot on a shared maths core",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "test": "node test/core.test.js && node test/bot.test.js && node build.js && node test/ios.test.js && python3 test/ui.test.py",
+    "test:core": "node test/core.test.js",
+    "test:bot": "node test/bot.test.js",
+    "test:ui": "node build.js && python3 test/ui.test.py",
+    "bot": "node bot/bot.js",
+    "register": "node bot/register.js",
+    "test:ios": "./ios/sync-web.sh && node test/ios.test.js",
+    "ios:sync": "./ios/sync-web.sh"
+  }
+}
